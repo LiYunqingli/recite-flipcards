@@ -441,15 +441,17 @@ function applyOutcome(c: CardRow, known: boolean): CardRow {
     c.correct += 1
     c.streak = (c.streak ?? 0) + 1
     if (c.streak >= KNOWN_STREAK) {
+      // 连续答对达到阈值 → 标记为「已掌握」，并按艾宾浩斯推进复习层级
       c.status = 'known'
       c.box = Math.min((c.box ?? 0) + 1, EB_MAX_BOX)
       const days = nextInterval(c.box)
       c.interval = days
       c.dueAt = Date.now() + days * DAY
-    } else if (c.status === 'mistake') {
-      c.status = 'new'
     }
+    // 未达到阈值：保留当前状态（'new' / 'mistake' 都不变），
+    // 直到连续答对 KNOWN_STREAK 次才掌握 —— 这样错题本里的卡片在满 3 次前不会消失。
   } else {
+    // 答错：清空连对、标为错题、记忆层级归零、立即到期（稍后在本轮练习中复现）
     c.missed += 1
     c.streak = 0
     c.status = 'mistake'

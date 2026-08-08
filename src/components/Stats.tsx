@@ -218,7 +218,7 @@ export default function Stats() {
                   <XAxis dataKey="key" tick={{ fontSize: 10 }} interval={1} />
                   <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
                   <Tooltip
-                    formatter={(value, name) => [value as number, name === 'known' ? '答对' : '答错']}
+                    formatter={(value, name) => [value as number, name as string]}
                     labelFormatter={(l) => l}
                     contentStyle={{ borderRadius: 10, border: 'none' }}
                   />

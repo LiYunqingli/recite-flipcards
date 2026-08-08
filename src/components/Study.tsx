@@ -167,51 +167,56 @@ export default function Study({ packageId, mode, deckName, onExit }: Props) {
     if (!current || !choice) return
     const known = choice === 'known'
     const cardId = current.id!
+    const curStreak = current.streak ?? 0
+    // 本次「知道」是否已连续答对 KNOWN_STREAK 次（达到则掌握，不再复现）
+    const willMaster = known && curStreak + 1 >= KNOWN_STREAK
 
-    // 落库：更新 streak / status / 艾宾浩斯调度，并记录作答
-    void recordAnswer(cardId, known, localMode).then((updated) => {
-      // 同步最新卡片状态，使复现时的「连对 x/3」提示保持准确
-      if (updated) setCardsMap((m) => ({ ...m, [cardId]: updated }))
-      // 错误重复机制：
-      // · 「不清楚」→ 随机插入待重练队列，稍后再次出现；
-      // · 「知道」且在错题本模式且尚未满 3 次正确 → 继续重练直到掌握。
-      setPending((p) => {
-        if (!known) {
-          const next = p.slice()
-          const idx = Math.floor(Math.random() * (next.length + 1))
-          next.splice(idx, 0, cardId)
-          return next
-        }
-        if (localMode === 'mistake' && updated && updated.status !== 'known') {
-          const next = p.slice()
-          const idx = Math.floor(Math.random() * (next.length + 1))
-          next.splice(idx, 0, cardId)
-          return next
-        }
-        return p
-      })
-    })
+    // 乐观更新卡片状态（与 db.applyOutcome 完全一致），保证复现时「连对 x/3」提示即时准确，
+    // 并避免异步回写导致的「总题数 / 剩余题数」闪烁跳动。
+    const ns = curStreak + 1
+    const updatedCard: CardRow = known
+      ? { ...current, streak: ns, status: ns >= KNOWN_STREAK ? 'known' : current.status }
+      : { ...current, streak: 0, status: 'mistake' }
+    const newMap = { ...cardsMap, [cardId]: updatedCard }
+    setCardsMap(newMap)
+    void recordAnswer(cardId, known, localMode)
 
-    // 推进到下一张
-    let nextId: number | null = null
+    // 同步推进队列：优先从 queue 取队首，否则从 pending 随机取一张
     let nq = queue
     let np = pending
     if (queue.length > 0) {
-      nextId = queue[0]
       nq = queue.slice(1)
     } else if (pending.length > 0) {
       const idx = Math.floor(Math.random() * pending.length)
-      nextId = pending[idx]
       np = pending.slice(0, idx).concat(pending.slice(idx + 1))
     }
+
+    // 错误重复机制（在当前练习内「增加出现次数」）：本题尚未掌握 →
+    // 统计剩余队列中该卡已有份数，补足到 3 份：
+    //   · 后面没有相同题目 → 随机创建 3 份；
+    //   · 已有但数量不足 3 → 补到 3 份；
+    //   · 已达 3 份 → 不再新增（上限封顶，避免无限膨胀）。
+    // 答错必然未满 3 连对，按上述补足；答对但未满 3 连对也补足，以便继续累计。
+    if (!willMaster) {
+      const rest = [...nq, ...np]
+      const existing = rest.filter((id) => id === cardId).length
+      const need = Math.max(0, KNOWN_STREAK - existing)
+      for (let k = 0; k < need; k++) {
+        const idx = Math.floor(Math.random() * (np.length + 1))
+        np.splice(idx, 0, cardId)
+      }
+    }
+
     setQueue(nq)
     setPending(np)
     setAnswered((a) => a + 1)
+
+    const nextId = nq.length > 0 ? nq[0] : np.length > 0 ? np[Math.floor(Math.random() * np.length)] : null
     if (nextId == null) {
       setCurrent(null)
       setFinished(true)
     } else {
-      setCurrent(cardsMap[nextId] ?? null)
+      setCurrent(newMap[nextId] ?? null)
       setFlipped(false)
       setChoice(null)
     }
@@ -281,11 +286,14 @@ export default function Study({ packageId, mode, deckName, onExit }: Props) {
               <span style={{ width: `${Math.max(0, Math.min(100, Math.round(prog * 100)))}%` }} />
             </div>
           </div>
-          <ProgressRing progress={prog} size={56} stroke={7}>
-            <span className="ring-pct" style={{ fontSize: 15 }}>
-              {Math.round(prog * 100)}%
-            </span>
-          </ProgressRing>
+          <div className="study-ring-wrap">
+            <ProgressRing progress={accuracy / 100} size={54} stroke={7}>
+              <span className="ring-pct" style={{ fontSize: 15 }}>
+                {accuracy}%
+              </span>
+            </ProgressRing>
+            <span className="study-ring-cap">掌握率</span>
+          </div>
         </div>
 
         {resumeInfo && (
@@ -372,12 +380,12 @@ export default function Study({ packageId, mode, deckName, onExit }: Props) {
               {localMode === 'mistake' ? (
                 <>
                   <IconMistake style={{ width: 13, height: 13, verticalAlign: '-2px', marginRight: 3 }} />
-                  错题本：连续答对 <b>{KNOWN_STREAK}</b> 次才掌握，答错会再次出现
+                  错题本：连续答对 <b>{KNOWN_STREAK}</b> 次才掌握，未满 3 次会随机复现
                 </>
               ) : (
                 <>
                   <IconPlan style={{ width: 13, height: 13, verticalAlign: '-2px', marginRight: 3 }} />
-                  每日计划练习 · 连续答对 <b>{KNOWN_STREAK}</b> 次才掌握，答错随机复现
+                  每日计划练习 · 连续答对 <b>{KNOWN_STREAK}</b> 次才掌握，未满 3 次会随机复现
                 </>
               )}
               {flipped && currentStreak > 0 && (

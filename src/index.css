@@ -1889,6 +1889,18 @@ input[type='datetime-local']::-webkit-calendar-picker-indicator {
 .study-progress-info .progress {
   height: 9px;
 }
+.study-ring-wrap {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.study-ring-cap {
+  font-size: 10.5px;
+  color: var(--text-3);
+  line-height: 1;
+}
 
 /* ---------------- 翻牌子卡片 ---------------- */
 .flip-card {
