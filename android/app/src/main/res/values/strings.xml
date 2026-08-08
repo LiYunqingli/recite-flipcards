@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">翻牌背题</string>
+    <string name="title_activity_main">翻牌背题</string>
+    <string name="package_name">com.recite.flipcards</string>
+    <string name="custom_url_scheme">com.recite.flipcards</string>
+</resources>

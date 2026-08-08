@@ -1,0 +1,63 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# ===== 编译产物 / 打包文件（根目录散落的 APK 等） =====
+# android/ 子目录自身的 .gitignore 已覆盖 build/、.gradle/、local.properties
+# 根目录直接散落的构建产物：
+*.apk
+*.aab
+*.aar
+*.ap_
+
+# ===== 依赖与构建缓存（子目录） =====
+node_modules/
+dist/
+dist-ssr/
+
+# ===== 工作区 / 工具缓存（非仓库文件，不应入库） =====
+.workbuddy/
+.playwright-cli/
+screenshots/
+
+# ===== 本地日志 / 临时文档 / 设计稿（二进制，非源码） =====
+debug.log
+overview.md
+app_ui.png
+
+# ===== 系统 / 环境文件 =====
+.env
+.env.*
+*.local
+
+# ===== 签名密钥（绝不可入库！泄露可被他人伪造发布你的 App） =====
+*.jks
+*.keystore
+*.p12
+*.pfx
+signing.properties
+
+# ===== 临时 / 调试脚本（非工程源码，含硬编码绝对路径） =====
+_p1.js
+

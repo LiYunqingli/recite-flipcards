@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>翻牌背题</title>
+    <script>
+      // Polyfills for older WebViews (e.g. Huawei Chromium 83)
+      // Must run before any ES module code.
+
+      // Detect flexbox gap support (added in Chrome 84).
+      // Chromium 83 ignores `gap` in flex containers, causing elements to
+      // stack with zero spacing. We add a class to provide margin fallbacks.
+      (function () {
+        var t = document.createElement('div');
+        t.style.cssText =
+          'display:flex;gap:1px;position:fixed;left:-9999px;top:-9999px;width:10px;height:10px';
+        var a = document.createElement('div');
+        a.style.cssText = 'width:1px;height:1px';
+        var b = a.cloneNode();
+        t.appendChild(a);
+        t.appendChild(b);
+        document.documentElement.appendChild(t);
+        var ok = b.offsetLeft > 1;
+        document.documentElement.removeChild(t);
+        if (!ok) document.documentElement.classList.add('no-flex-gap');
+      })();
+
+      // Mobile viewport height: 100vh/100dvh mis-reports in old WebViews
+      // (Chromium 83) — it includes the area behind the system status/nav
+      // bars, making the shell taller than the visible screen and pushing the
+      // tab bar below the fold. Pin the app shell to the real visible height.
+      (function () {
+        function setAppHeight() {
+          document.documentElement.style.setProperty('--app-height', window.innerHeight + 'px');
+        }
+        setAppHeight();
+        window.addEventListener('resize', setAppHeight);
+        window.addEventListener('orientationchange', function () {
+          setTimeout(setAppHeight, 200);
+        });
+      })();
+
+      if (!Object.hasOwn) {
+        Object.defineProperty(Object, 'hasOwn', {
+          value: function (obj, prop) {
+            return Object.prototype.hasOwnProperty.call(obj, prop)
+          },
+          configurable: true,
+          writable: true,
+        })
+      }
+      if (typeof structuredClone !== 'function') {
+        window.structuredClone = function (obj) {
+          return JSON.parse(JSON.stringify(obj))
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
