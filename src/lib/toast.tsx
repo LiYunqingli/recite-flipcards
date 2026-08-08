@@ -15,29 +15,35 @@ interface ToastItem {
   message: string
 }
 
-type PushFn = (type: ToastType, message: string) => void
+interface PushOptions {
+  /** 持续时间（毫秒）。默认 2400。失败/警告场景可设 6000-8000 看清提示。 */
+  duration?: number
+}
+
+type PushFn = (type: ToastType, message: string, opts?: PushOptions) => void
 
 const ToastCtx = createContext<PushFn>(() => {})
 
 export function useToast() {
   const push = useContext(ToastCtx)
   return {
-    success: (m: string) => push('success', m),
-    error: (m: string) => push('error', m),
-    info: (m: string) => push('info', m),
-    warning: (m: string) => push('warning', m),
+    success: (m: string, opts?: PushOptions) => push('success', m, opts),
+    error: (m: string, opts?: PushOptions) => push('error', m, opts),
+    info: (m: string, opts?: PushOptions) => push('info', m, opts),
+    warning: (m: string, opts?: PushOptions) => push('warning', m, opts),
   }
 }
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([])
 
-  const push = useCallback<PushFn>((type, message) => {
+  const push = useCallback<PushFn>((type, message, opts) => {
     const id = Date.now() + Math.random()
     setToasts((t) => [...t, { id, type, message }])
+    const ms = opts?.duration ?? 2400
     window.setTimeout(() => {
       setToasts((t) => t.filter((x) => x.id !== id))
-    }, 2400)
+    }, ms)
   }, [])
 
   return (
