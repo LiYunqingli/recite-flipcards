@@ -28,8 +28,7 @@ const STATUS_CLASS: Record<CardStatus, string> = {
   new: 'fresh',
 }
 const MODE_LABEL: Record<StudyMode, string> = {
-  sequential: '顺序',
-  random: '随机',
+  plan: '每日计划',
   mistake: '错题本',
 }
 

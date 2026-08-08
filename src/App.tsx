@@ -12,10 +12,11 @@ import Me from './components/Me'
 import DeckDetail from './components/DeckDetail'
 import Study from './components/Study'
 import Preview from './components/Preview'
+import Mistakes from './components/Mistakes'
 import ImportButton from './components/ImportButton'
-import { IconChart, IconList, IconMoon, IconSun, IconUser } from './components/ui/icons'
+import { IconChart, IconList, IconMoon, IconSun, IconUser, IconMistake } from './components/ui/icons'
 
-type View = 'library' | 'stats' | 'me' | 'study' | 'preview'
+type View = 'library' | 'mistakes' | 'stats' | 'me'
 
 interface StudyCtx {
   packageId: number
@@ -48,7 +49,7 @@ export default function App() {
     setStudy({ packageId: pkg.id, name: pkg.name, mode: m })
     setDetailPkg(null)
     setPreviewPkg(null)
-    setView('study')
+    setView('library')
   }
 
   const startStudy = (m: StudyMode) => {
@@ -58,7 +59,7 @@ export default function App() {
   const startPreview = (pkg: PackageRow) => {
     setPreviewPkg(pkg)
     setDetailPkg(null)
-    setView('preview')
+    setView('library')
   }
 
   const exitStudy = () => {
@@ -70,7 +71,7 @@ export default function App() {
   // 用 ref 持有最新闭包，保证监听器始终读取到当前导航状态。
   const backRef = useRef<() => void>(() => {})
   backRef.current = () => {
-    // 1) 嵌套弹窗优先消费（如删除二次确认框）
+    // 1) 嵌套弹窗优先消费（如删除二次确认框、学习退出确认）
     if (runBackInterceptors()) return
     // 2) 学习中 → 退出学习回到牌库
     if (study) {
@@ -78,10 +79,9 @@ export default function App() {
       return
     }
     // 3) 预览页 → 返回牌库详情
-    if (view === 'preview' && previewPkg) {
+    if (previewPkg) {
       setDetailPkg(previewPkg)
       setPreviewPkg(null)
-      setView('library')
       return
     }
     // 4) 牌库详情弹窗 → 关闭
@@ -89,12 +89,12 @@ export default function App() {
       setDetailPkg(null)
       return
     }
-    // 4) 非首页 Tab → 回到首页 Tab
+    // 5) 非首页 Tab → 回到首页 Tab
     if (view !== 'library') {
       setView('library')
       return
     }
-    // 5) 首页根部 → 退出应用
+    // 6) 首页根部 → 退出应用
     void CapacitorApp.exitApp()
   }
 
@@ -112,17 +112,16 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      {view === 'preview' && previewPkg ? (
+      {previewPkg ? (
         <Preview
           pkg={previewPkg}
           onBack={() => {
             setDetailPkg(previewPkg)
             setPreviewPkg(null)
-            setView('library')
           }}
-          onStartStudy={() => beginStudy(previewPkg, 'sequential')}
+          onStartStudy={() => beginStudy(previewPkg, 'plan')}
         />
-      ) : view === 'study' && study ? (
+      ) : study ? (
         <Study
           packageId={study.packageId}
           mode={study.mode}
@@ -149,6 +148,7 @@ export default function App() {
 
           <main className="app-content">
             {view === 'library' && <Library onOpen={setDetailPkg} />}
+            {view === 'mistakes' && <Mistakes onStartPractice={beginStudy} />}
             {view === 'stats' && <Stats />}
             {view === 'me' && <Me />}
           </main>
@@ -159,7 +159,7 @@ export default function App() {
 
       {/* 导入悬浮按钮：用 flex 定位层渲染到右下角（.fab-layer），
           规避旧 WebView 对 position 偏移 / right 的异常 */}
-      {view === 'library' && pkgCount > 0 && (
+      {!study && !previewPkg && view === 'library' && pkgCount > 0 && (
         <div className="fab-layer">
           <ImportButton fab />
         </div>
@@ -178,6 +178,7 @@ export default function App() {
 function TabBar({ view, onChange }: { view: View; onChange: (v: View) => void }) {
   const tabs: { key: View; label: string; icon: ReactNode }[] = [
     { key: 'library', label: '牌库', icon: <IconList /> },
+    { key: 'mistakes', label: '错题', icon: <IconMistake /> },
     { key: 'stats', label: '统计', icon: <IconChart /> },
     { key: 'me', label: '我的', icon: <IconUser /> },
   ]

@@ -81,9 +81,9 @@ export default function Me() {
           <div className="about-logo">◆</div>
           <div className="about-name">翻牌背题</div>
           <p className="muted about-desc">
-            离线问答背题工具：顺序 / 随机 / 错题本多种模式，
-            翻牌即看答案，「不清楚」自动收入错题本并在后续随机复现。
-            数据全部保存在本机数据库，无需联网。
+            离线问答背题工具：先设每日「旧题 + 新题」计划，
+            按艾宾浩斯遗忘曲线智能出题，连续答对 3 次才掌握，
+            答错随机复现。错题本单独成页，数据全在本机，无需联网。
           </p>
           <div className="kv">
             <span className="k">存储</span>
@@ -95,7 +95,7 @@ export default function Me() {
           </div>
           <div className="kv">
             <span className="k">版本</span>
-            <span className="v">1.0.0</span>
+            <span className="v">1.1.0</span>
           </div>
         </div>
       </div>

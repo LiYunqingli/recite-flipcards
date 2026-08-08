@@ -237,3 +237,29 @@ export const IconLayers = (p: P) => (
     <path d="M3 18l9 5 9-5" />
   </svg>
 )
+
+/* 错题本：书 + 叉号 */
+export const IconMistake = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z" />
+    <path d="M4 5.5V20.5" />
+    <path d="M14.5 8.5l3 3M17.5 8.5l-3 3" />
+  </svg>
+)
+
+/* 计划：日历 + 时钟 */
+export const IconPlan = (p: P) => (
+  <svg {...base(p)}>
+    <rect x="3" y="5" width="18" height="16" rx="2" />
+    <path d="M3 9h18M8 3v4M16 3v4" />
+    <path d="M12 13v3.5l2.5 1.5" />
+  </svg>
+)
+
+/* 复习/重练：循环箭头 */
+export const IconRefresh = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M4 10a6 6 0 0 1 6-6h2l-2-2M20 14a6 6 0 0 1-6 6h-2l2 2" />
+    <path d="M10 4 8 6M14 20l2-2" />
+  </svg>
+)

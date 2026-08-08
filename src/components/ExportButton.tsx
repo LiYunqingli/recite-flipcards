@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { saveAs } from 'file-saver'
+import { Capacitor } from '@capacitor/core'
+import { Filesystem, Directory } from '@capacitor/filesystem'
 import { exportPackageRaw } from '../lib/db'
 import { useToast } from '../lib/toast'
 import Button from './ui/Button'
@@ -12,6 +14,12 @@ interface Props {
   size?: 'md' | 'sm'
   label?: string
   onExported?: () => void
+}
+
+/** Web 端回退：用浏览器下载 */
+function downloadBlob(text: string, fname: string) {
+  const blob = new Blob([text], { type: 'application/json;charset=utf-8' })
+  saveAs(blob, fname)
 }
 
 export default function ExportButton({
@@ -33,13 +41,28 @@ export default function ExportButton({
         toast.error('数据包不存在')
         return
       }
-      // 仅按「原先导入的数据包」原样导出
-      const blob = new Blob([JSON.stringify(res.raw, null, 2)], {
-        type: 'application/json;charset=utf-8',
-      })
+      // 导出包含「学习进度 + 题目进度」的增强数据包
+      const text = JSON.stringify(res.pkg, null, 2)
       const fname = `${res.name}.json`.replace(/[\\/:*?"<>|]/g, '_')
-      saveAs(blob, fname)
-      toast.success('已导出数据包')
+
+      if (Capacitor.isNativePlatform()) {
+        try {
+          await Filesystem.writeFile({
+            path: `Download/${fname}`,
+            data: text,
+            directory: Directory.Documents,
+            recursive: true,
+          })
+          toast.success('已导出到手机 Download 目录')
+        } catch {
+          // 原生写入失败（如权限）时回退到浏览器下载
+          downloadBlob(text, fname)
+          toast.success('已导出数据包')
+        }
+      } else {
+        downloadBlob(text, fname)
+        toast.success('已导出数据包')
+      }
       onExported?.()
     } catch {
       toast.error('导出失败')

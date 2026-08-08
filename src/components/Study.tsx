@@ -1,20 +1,23 @@
 import { useEffect, useRef, useState } from 'react'
-import { db, recordAnswer, flipCardStatus, shuffle, getProgress, saveProgress, clearProgress, type CardRow, type StudyMode } from '../lib/db'
+import {
+  db,
+  recordAnswer,
+  getPlan,
+  buildDailyPlan,
+  getProgress,
+  saveProgress,
+  clearProgress,
+  KNOWN_STREAK,
+  type CardRow,
+  type StudyMode,
+} from '../lib/db'
 import { useTheme } from '../lib/theme'
 import { registerBackHandler } from '../lib/back'
 import Button from './ui/Button'
 import ProgressRing from './ui/ProgressRing'
 import FlashCard from './FlashCard'
 import Modal from './ui/Modal'
-import {
-  IconArrowLeft,
-  IconCheck,
-  IconChevronRight,
-  IconMoon,
-  IconRepeat,
-  IconSun,
-  IconX,
-} from './ui/icons'
+import { IconArrowLeft, IconCheck, IconChevronRight, IconMoon, IconSun, IconX, IconPlan, IconMistake, IconRefresh } from './ui/icons'
 
 interface Props {
   packageId: number
@@ -58,7 +61,6 @@ export default function Study({ packageId, mode, deckName, onExit }: Props) {
   const [resumeInfo, setResumeInfo] = useState<{ answered: number; remaining: number } | null>(null)
 
   // 初始化 / 重置学习队列（数据包、模式或重开变化时）
-  // 首次进入时尝试断点续练：恢复到上次退出时的题目位置
   useEffect(() => {
     let alive = true
     const attemptResume = isFirstRef.current
@@ -78,12 +80,8 @@ export default function Study({ packageId, mode, deckName, onExit }: Props) {
       if (attemptResume) {
         const prog = await getProgress(packageId)
         if (prog && prog.mode === localMode && (prog.queue?.length || prog.pending?.length)) {
-          let rq = (prog.queue ?? []).filter((id) => map[id] != null)
+          const rq = (prog.queue ?? []).filter((id) => map[id] != null)
           const rp = (prog.pending ?? []).filter((id) => map[id] != null)
-          // 随机 / 错题本模式：恢复时剔除中途已掌握的题
-          if (localMode !== 'sequential') {
-            rq = rq.filter((id) => map[id].status !== 'known')
-          }
           if (rq.length || rp.length) {
             initQueue = rq
             initPending = rp
@@ -96,12 +94,12 @@ export default function Study({ packageId, mode, deckName, onExit }: Props) {
       // 未恢复则按模式重新构建队列
       if (!resumed) {
         if (localMode === 'mistake') {
+          // 错题本：所有 status === 'mistake' 的卡片，随机顺序
           initQueue = cards.filter((c) => c.status === 'mistake').map((c) => c.id!)
-        } else if (localMode === 'random') {
-          // 随机模式排除已掌握的题
-          initQueue = shuffle(cards.filter((c) => c.status !== 'known').map((c) => c.id!))
         } else {
-          initQueue = cards.slice().sort((a, b) => a.order - b.order).map((c) => c.id!)
+          // 每日计划：旧题（最近易错 + 艾宾浩斯到期）+ 新题，最后随机
+          const plan = (await getPlan(packageId)) ?? { old: 10, new: 10 }
+          initQueue = await buildDailyPlan(packageId, plan)
         }
       }
 
@@ -139,55 +137,62 @@ export default function Study({ packageId, mode, deckName, onExit }: Props) {
     void saveProgress(packageId, localMode, queue, pending, answered)
   }, [queue, pending, answered, finished, localMode, packageId])
 
+  // 翻牌作答：先翻面并显示答案，落库推迟到「下一张」以统一处理 3 次正确机制
   const answer = (known: boolean) => {
-    if (!current || flipped) return
+    if (!current || flipped || choice) return
     setFlipped(true)
     setChoice(known ? 'known' : 'unknown')
-    void recordAnswer(current.id!, known, localMode)
     setSummary((s) => ({
       reviewed: s.reviewed + 1,
       known: s.known + (known ? 1 : 0),
       unknown: s.unknown + (known ? 0 : 1),
     }))
-    // 「不清楚」→ 随机插入待重练队列，稍后在后面再次出现
-    if (!known) {
-      setPending((p) => {
-        const next = p.slice()
-        const idx = Math.floor(Math.random() * (next.length + 1))
-        next.splice(idx, 0, current.id!)
-        return next
-      })
-    }
   }
 
-  // 翻面后改判：把本题直接判为 知道/不知道（修正练习中的选择，不重复计数）
+  // 翻面后改判：把本题直接判为 知道/不知道（仅调整本次展示，落库仍在下一张）
   const choose = (know: boolean) => {
     if (!current || !choice || !flipped) return
     const target = know ? 'known' : 'unknown'
     if (choice === target) return
     const wasKnown = choice === 'known'
     setChoice(target)
-    void flipCardStatus(current.id!, know)
     setSummary((s) => ({
       reviewed: s.reviewed,
       known: s.known + (know ? 1 : 0) - (wasKnown ? 1 : 0),
       unknown: s.unknown + (know ? 0 : 1) - (!wasKnown ? 1 : 0),
     }))
-    // 同步待重练队列：判为「知道」则移出，判为「不清楚」则随机插入
-    setPending((p) => {
-      const exists = p.includes(current.id!)
-      if (know) {
-        return exists ? p.filter((id) => id !== current.id!) : p
-      }
-      if (exists) return p
-      const next = p.slice()
-      const idx = Math.floor(Math.random() * (next.length + 1))
-      next.splice(idx, 0, current.id!)
-      return next
-    })
   }
 
   const next = () => {
+    if (!current || !choice) return
+    const known = choice === 'known'
+    const cardId = current.id!
+
+    // 落库：更新 streak / status / 艾宾浩斯调度，并记录作答
+    void recordAnswer(cardId, known, localMode).then((updated) => {
+      // 同步最新卡片状态，使复现时的「连对 x/3」提示保持准确
+      if (updated) setCardsMap((m) => ({ ...m, [cardId]: updated }))
+      // 错误重复机制：
+      // · 「不清楚」→ 随机插入待重练队列，稍后再次出现；
+      // · 「知道」且在错题本模式且尚未满 3 次正确 → 继续重练直到掌握。
+      setPending((p) => {
+        if (!known) {
+          const next = p.slice()
+          const idx = Math.floor(Math.random() * (next.length + 1))
+          next.splice(idx, 0, cardId)
+          return next
+        }
+        if (localMode === 'mistake' && updated && updated.status !== 'known') {
+          const next = p.slice()
+          const idx = Math.floor(Math.random() * (next.length + 1))
+          next.splice(idx, 0, cardId)
+          return next
+        }
+        return p
+      })
+    })
+
+    // 推进到下一张
     let nextId: number | null = null
     let nq = queue
     let np = pending
@@ -216,6 +221,7 @@ export default function Study({ packageId, mode, deckName, onExit }: Props) {
   const denom = answered + remaining
   const prog = denom === 0 ? 1 : answered / denom
   const accuracy = summary.reviewed ? Math.round((summary.known / summary.reviewed) * 100) : 0
+  const currentStreak = current?.streak ?? 0
 
   // 系统返回键：未完成时弹确认框拦截，已完成则放行给上层退出
   useEffect(() => {
@@ -301,7 +307,9 @@ export default function Study({ packageId, mode, deckName, onExit }: Props) {
             </h3>
             <p className="summary-sub">
               {totalMain === 0
-                ? '该数据包没有可练习的卡片'
+                ? localMode === 'mistake'
+                  ? '当前没有需要复习的错题'
+                  : '该数据包没有可练习的卡片'
                 : `共练习 ${summary.reviewed} 张 · 掌握 ${summary.known} · 没记住 ${summary.unknown}`}
             </p>
 
@@ -323,7 +331,7 @@ export default function Study({ packageId, mode, deckName, onExit }: Props) {
                 variant="primary"
                 block
                 onClick={() => setRunId((r) => r + 1)}
-                icon={<IconRepeat />}
+                icon={<IconRefresh />}
               >
                 再来一轮
               </Button>
@@ -361,9 +369,20 @@ export default function Study({ packageId, mode, deckName, onExit }: Props) {
             </div>
 
             <p className="study-foot muted">
-              {localMode === 'mistake'
-                ? '错题本模式：仅复习标记为「没记住」的卡片'
-                : '「不清楚」的卡片会在后续随机再次出现'}
+              {localMode === 'mistake' ? (
+                <>
+                  <IconMistake style={{ width: 13, height: 13, verticalAlign: '-2px', marginRight: 3 }} />
+                  错题本：连续答对 <b>{KNOWN_STREAK}</b> 次才掌握，答错会再次出现
+                </>
+              ) : (
+                <>
+                  <IconPlan style={{ width: 13, height: 13, verticalAlign: '-2px', marginRight: 3 }} />
+                  每日计划练习 · 连续答对 <b>{KNOWN_STREAK}</b> 次才掌握，答错随机复现
+                </>
+              )}
+              {flipped && currentStreak > 0 && (
+                <span className="streak-badge">本题已连对 {currentStreak}/{KNOWN_STREAK}</span>
+              )}
             </p>
           </>
         ) : null}
